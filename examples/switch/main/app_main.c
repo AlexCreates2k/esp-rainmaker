@@ -27,6 +27,9 @@
 #include <app_wifi.h>
 #include <app_insights.h>
 
+#include <stdlib.h>  // rand(), srand()
+#include <time.h>    // time()
+
 #include "app_priv.h"
 
 static const char *TAG = "app_main";
@@ -249,20 +252,24 @@ void app_main()
 
     /* Create the Dispense device */
     dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_TEMP_SENSOR, NULL);
-    /* Add the write callback for the dispense device */
+
+    /* Add the write callback for the Dispense device */
     esp_rmaker_device_add_cb(dispense_device, dispense_write_cb, NULL);
-    /* Add standard parameters for the dispense device */
+
+    /* Add standard parameters for the Dispense device */
     esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense"));
-    esp_rmaker_param_t *dispense_param = esp_rmaker_param_create(ESP_RMAKER_DEF_TEMPERATURE_NAME, esp_rmaker_int(0));
+
+    esp_rmaker_param_t *dispense_param = esp_rmaker_param_create(ESP_RMAKER_DEF_TEMPERATURE_NAME, ESP_RMAKER_PARAM_TYPE_FLOAT, esp_rmaker_float(0.0f));
     esp_rmaker_device_add_param(dispense_device, dispense_param);
     esp_rmaker_device_assign_primary_param(dispense_device, dispense_param);
-    /* Add the dispense device to the node */
+
+    /* Add the Dispense device to the node */
     esp_rmaker_node_add_device(node, dispense_device);
 
     /* Enable OTA */
     esp_rmaker_ota_enable_default();
 
-    /* Enable timezone service which will be required for setting appropriate timezone
+    /* Enable timezone service which will be require for setting appropriate timezone
      * from the phone apps for scheduling to work correctly.
      * For more information on the various ways of setting timezone, please check
      * https://rainmaker.espressif.com/docs/time-service.html.
@@ -281,8 +288,7 @@ void app_main()
     /* Start the ESP RainMaker Agent */
     esp_rmaker_start();
 
-    srand(time(NULL));  // Seed for random number generation
-
+    err = app_wifi_set_custom_mfg_data(MGF_DATA_DEVICE_TYPE_SWITCH, MFG_DATA_DEVICE_SUBTYPE_SWITCH);
     /* Start the Wi-Fi.
      * If the node is provisioned, it will start connection attempts,
      * else, it will start Wi-Fi provisioning. The function will return
