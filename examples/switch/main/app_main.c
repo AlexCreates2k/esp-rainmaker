@@ -34,6 +34,7 @@ esp_rmaker_device_t *switch_device; // Original switch device
 esp_rmaker_device_t *switch_device1; // Define additional switch devices
 esp_rmaker_device_t *switch_device2;
 esp_rmaker_device_t *switch_device3;
+esp_rmaker_device_t *dispense_device; // Dispense device
 
 /* Callback to handle commands received from the RainMaker cloud */
 static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
@@ -49,6 +50,17 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
         app_driver_set_state(val.val.b);
         esp_rmaker_param_update_and_report(param, val);
     }
+    return ESP_OK;
+}
+
+/* Callback for Dispense device */
+static esp_err_t dispense_write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
+            const esp_rmaker_param_val_t val, void *priv_data, esp_rmaker_write_ctx_t *ctx)
+{
+    if (ctx) {
+        ESP_LOGI(TAG, "Received write request for Dispense device via : %s", esp_rmaker_device_cb_src_to_str(ctx->src));
+    }
+    // Add your Dispense logic here
     return ESP_OK;
 }
 
@@ -189,57 +201,52 @@ void app_main()
         abort();
     }
 
-    /* Create the original Switch device */
+    /* Create all the devices */
     switch_device = esp_rmaker_device_create("Switch", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    switch_device1 = esp_rmaker_device_create("Switch1", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    switch_device2 = esp_rmaker_device_create("Switch2", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    switch_device3 = esp_rmaker_device_create("Switch3", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_OTHER, NULL); // Create the Dispense device
 
-    /* Add the write callback for the original device */
+    /* Add the write callback for all devices */
     esp_rmaker_device_add_cb(switch_device, write_cb, NULL);
+    esp_rmaker_device_add_cb(switch_device1, write_cb, NULL);
+    esp_rmaker_device_add_cb(switch_device2, write_cb, NULL);
+    esp_rmaker_device_add_cb(switch_device3, write_cb, NULL);
+    esp_rmaker_device_add_cb(dispense_device, dispense_write_cb, NULL); // Add the Dispense device callback
 
-    /* Add standard parameters for the original switch device */
+    /* Add standard parameters for all devices */
     esp_rmaker_device_add_param(switch_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch"));
+    esp_rmaker_device_add_param(switch_device1, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch1"));
+    esp_rmaker_device_add_param(switch_device2, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch2"));
+    esp_rmaker_device_add_param(switch_device3, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch3"));
+    esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense")); // Add parameter for the Dispense device
 
     esp_rmaker_param_t *power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
     esp_rmaker_device_add_param(switch_device, power_param);
     esp_rmaker_device_assign_primary_param(switch_device, power_param);
 
-    /* Create additional switch devices */
-    switch_device1 = esp_rmaker_device_create("Switch1", ESP_RMAKER_DEVICE_SWITCH, NULL);
-    switch_device2 = esp_rmaker_device_create("Switch2", ESP_RMAKER_DEVICE_SWITCH, NULL);
-    switch_device3 = esp_rmaker_device_create("Switch3", ESP_RMAKER_DEVICE_SWITCH, NULL);
-
-    /* Add the write callback for each additional device */
-    esp_rmaker_device_add_cb(switch_device1, write_cb, NULL);
-    esp_rmaker_device_add_cb(switch_device2, write_cb, NULL);
-    esp_rmaker_device_add_cb(switch_device3, write_cb, NULL);
-
-    /* Add standard parameters for each additional switch device */
-    esp_rmaker_device_add_param(switch_device1, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch1"));
-    esp_rmaker_device_add_param(switch_device2, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch2"));
-    esp_rmaker_device_add_param(switch_device3, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch3"));
-
     esp_rmaker_param_t *power_param1 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
     esp_rmaker_param_t *power_param2 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
     esp_rmaker_param_t *power_param3 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
+    esp_rmaker_param_t *dispense_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER); // Create parameter for the Dispense device
 
     esp_rmaker_device_add_param(switch_device1, power_param1);
     esp_rmaker_device_add_param(switch_device2, power_param2);
     esp_rmaker_device_add_param(switch_device3, power_param3);
+    esp_rmaker_device_add_param(dispense_device, dispense_param); // Add parameter for the Dispense device
 
     esp_rmaker_device_assign_primary_param(switch_device1, power_param1);
     esp_rmaker_device_assign_primary_param(switch_device2, power_param2);
     esp_rmaker_device_assign_primary_param(switch_device3, power_param3);
+    esp_rmaker_device_assign_primary_param(dispense_device, dispense_param); // Assign primary parameter for the Dispense device
 
-    /* Create the Dispense device */
-    esp_rmaker_device_t *dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_OTHER, NULL);
-
-    /* Add the write callback for the Dispense device */
-    esp_rmaker_device_add_cb(dispense_device, write_cb, NULL);
-
-    /* Add standard parameters for the Dispense device */
-    esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense"));
-
-    /* Add the Dispense device to the node */
-    esp_rmaker_node_add_device(node, dispense_device);
+    /* Add all devices to the node */
+    esp_rmaker_node_add_device(node, switch_device);
+    esp_rmaker_node_add_device(node, switch_device1);
+    esp_rmaker_node_add_device(node, switch_device2);
+    esp_rmaker_node_add_device(node, switch_device3);
+    esp_rmaker_node_add_device(node, dispense_device); // Add the Dispense device to the node
 
     /* Enable OTA */
     esp_rmaker_ota_enable_default();
