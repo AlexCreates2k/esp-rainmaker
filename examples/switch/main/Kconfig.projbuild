@@ -2,9 +2,8 @@ menu "Example Configuration"
 
 	config EXAMPLE_BOARD_BUTTON_GPIO
     	int "Boot Button GPIO"
-    	default 48 if IDF_TARGET_ESP32S3
-    	default 9 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C6
-    	default 0
+    		default 9 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C6
+    	default 48
     	help
         
 		GPIO number on which the "Boot" button is connected. This is generally used
@@ -20,8 +19,7 @@ menu "Example Configuration"
 
 	config EXAMPLE_OUTPUT_GPIO
     	int "Output GPIO"
-   	default 48 if IDF_TARGET_ESP32S3
-    	default 19 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C6
+   	    	default 19 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C6
     	help
         	This is an output GPIO that will be connected to a relay or other driver circuit in most cases.
         	If the power changes, this GPIO output level will also change.
