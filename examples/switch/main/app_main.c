@@ -34,7 +34,6 @@ esp_rmaker_device_t *switch_device; // Original switch device
 esp_rmaker_device_t *switch_device1; // Define additional switch devices
 esp_rmaker_device_t *switch_device2;
 esp_rmaker_device_t *switch_device3;
-esp_rmaker_device_t *pump_device; // New pump device
 
 /* Callback to handle commands received from the RainMaker cloud */
 static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
@@ -49,9 +48,6 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
                 esp_rmaker_param_get_name(param));
         app_driver_set_state(val.val.b);
         esp_rmaker_param_update_and_report(param, val);
-    } else if (strcmp(esp_rmaker_param_get_name(param), "dispensed") == 0) {
-        ESP_LOGI(TAG, "Received dispensed value = %f for %s", val.val.f, esp_rmaker_device_get_name(device));
-        // Handle the dispensed value update here (e.g., update display)
     }
     return ESP_OK;
 }
@@ -233,25 +229,17 @@ void app_main()
     esp_rmaker_device_assign_primary_param(switch_device2, power_param2);
     esp_rmaker_device_assign_primary_param(switch_device3, power_param3);
 
-    /* Add all switch devices to the node */
-    esp_rmaker_node_add_device(node, switch_device);
-    esp_rmaker_node_add_device(node, switch_device1);
-    esp_rmaker_node_add_device(node, switch_device2);
-    esp_rmaker_node_add_device(node, switch_device3);
+    /* Create the Dispense device */
+    esp_rmaker_device_t *dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_OTHER, NULL);
 
-    /* Create the pump device */
-    pump_device = esp_rmaker_device_create("Pump", ESP_RMAKER_DEVICE_CUSTOM, NULL);
+    /* Add the write callback for the Dispense device */
+    esp_rmaker_device_add_cb(dispense_device, write_cb, NULL);
 
-    /* Add the write callback for the pump device */
-    esp_rmaker_device_add_cb(pump_device, write_cb, NULL);
+    /* Add standard parameters for the Dispense device */
+    esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense"));
 
-    /* Add standard parameters for the pump device */
-    esp_rmaker_device_add_param(pump_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Pump"));
-    esp_rmaker_param_t *dispensed_param = esp_rmaker_param_create("dispensed", NULL, esp_rmaker_float(0, 0, 100, 0.1));
-    esp_rmaker_device_add_param(pump_device, dispensed_param);
-
-    /* Add the pump device to the node */
-    esp_rmaker_node_add_device(node, pump_device);
+    /* Add the Dispense device to the node */
+    esp_rmaker_node_add_device(node, dispense_device);
 
     /* Enable OTA */
     esp_rmaker_ota_enable_default();
