@@ -1,11 +1,4 @@
-/* Switch Example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
+/* Switch Example with SainSmart 5V 2A 4 Channel Solid State Relay Module Integration */
 
 #include <string.h>
 #include <inttypes.h>
@@ -14,6 +7,7 @@
 #include <esp_log.h>
 #include <esp_event.h>
 #include <nvs_flash.h>
+#include <driver/gpio.h> // Added for GPIO control
 
 #include <esp_rmaker_core.h>
 #include <esp_rmaker_standard_types.h>
@@ -32,12 +26,23 @@
 #include "app_priv.h"
 
 static const char *TAG = "app_main";
-esp_rmaker_device_t *switch_device;
+esp_rmaker_device_t *switch_device; // Retain switch device for RGB control
+esp_rmaker_device_t *mixing_pump_device;
+esp_rmaker_device_t *micro_pump_device;
+esp_rmaker_device_t *grow_pump_device;
+esp_rmaker_device_t *bloom_pump_device;
+
+// Define GPIO pins for relay control
+#define RELAY_CHANNEL_MIXING_GPIO 26
+#define RELAY_CHANNEL_MICRO_GPIO 27
+#define RELAY_CHANNEL_GROW_GPIO 32
+#define RELAY_CHANNEL_BLOOM_GPIO 33
 
 /* Callback to handle commands received from the RainMaker cloud */
 static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
             const esp_rmaker_param_val_t val, void *priv_data, esp_rmaker_write_ctx_t *ctx)
 {
+    gpio_num_t relay_gpio = (gpio_num_t)priv_data;
     if (ctx) {
         ESP_LOGI(TAG, "Received write request via : %s", esp_rmaker_device_cb_src_to_str(ctx->src));
     }
@@ -45,11 +50,12 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
         ESP_LOGI(TAG, "Received value = %s for %s - %s",
                 val.val.b? "true" : "false", esp_rmaker_device_get_name(device),
                 esp_rmaker_param_get_name(param));
-        app_driver_set_state(val.val.b);
+        gpio_set_level(relay_gpio, val.val.b);
         esp_rmaker_param_update_and_report(param, val);
     }
     return ESP_OK;
 }
+
 /* Event handler for catching RainMaker events */
 static void event_handler(void* arg, esp_event_base_t event_base,
                           int32_t event_id, void* event_data)
@@ -116,7 +122,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                 break;
         }
     } else if (event_base == RMAKER_OTA_EVENT) {
-        switch(event_id) {
+         switch(event_id) {
             case RMAKER_OTA_EVENT_STARTING:
                 ESP_LOGI(TAG, "Starting OTA.");
                 break;
@@ -187,65 +193,88 @@ void app_main()
         abort();
     }
 
-    /* Create a Switch device.
-     * You can optionally use the helper API esp_rmaker_switch_device_create() to
-     * avoid writing code for adding the name and power parameters.
-     */
-    switch_device = esp_rmaker_device_create("Switch", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    /* Create devices for each pump */
+    mixing_pump_device = esp_rmaker_device_create("Mixing Pump", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    micro_pump_device = esp_rmaker_device_create("Micro Pump", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    grow_pump_device = esp_rmaker_device_create("Grow Pump", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    bloom_pump_device = esp_rmaker_device_create("Bloom Pump", ESP_RMAKER_DEVICE_SWITCH, NULL);
 
-    /* Add the write callback for the device. We aren't registering any read callback yet as
-     * it is for future use.
-     */
-    esp_rmaker_device_add_cb(switch_device, write_cb, NULL);
+    /* Add write callback for each pump device */
+    esp_rmaker_device_add_cb(mixing_pump_device, write_cb, (void*)RELAY_CHANNEL_MIXING_GPIO);
+    esp_rmaker_device_add_cb(micro_pump_device, write_cb, (void*)RELAY_CHANNEL_MICRO_GPIO);
+    esp_rmaker_device_add_cb(grow_pump_device, write_cb, (void*)RELAY_CHANNEL_GROW_GPIO);
+    esp_rmaker_device_add_cb(bloom_pump_device, write_cb, (void*)RELAY_CHANNEL_BLOOM_GPIO);
 
-    /* Add the standard name parameter (type: esp.param.name), which allows setting a persistent,
-     * user friendly custom name from the phone apps. All devices are recommended to have this
-     * parameter.
-     */
-    esp_rmaker_device_add_param(switch_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch"));
+    /* Add parameters for each pump device */
+    esp_rmaker_device_add_param(mixing_pump_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Mixing Pump"));
+    esp_rmaker_device_add_param(micro_pump_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Micro Pump"));
+    esp_rmaker_device_add_param(grow_pump_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Grow Pump"));
+    esp_rmaker_device_add_param(bloom_pump_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Bloom Pump"));
 
-    /* Add the standard power parameter (type: esp.param.power), which adds a boolean param
-     * with a toggle switch ui-type.
-     */
-    esp_rmaker_param_t *power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
-    esp_rmaker_device_add_param(switch_device, power_param);
+    esp_rmaker_param_t *mixing_power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
+    esp_rmaker_param_t *micro_power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
+    esp_rmaker_param_t *grow_power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
+    esp_rmaker_param_t *bloom_power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
 
-    /* Assign the power parameter as the primary, so that it can be controlled from the
-     * home screen of the phone apps.
-     */
-    esp_rmaker_device_assign_primary_param(switch_device, power_param);
+    esp_rmaker_device_add_param(mixing_pump_device, mixing_power_param);
+    esp_rmaker_device_add_param(micro_pump_device, micro_power_param);
+    esp_rmaker_device_add_param(grow_pump_device, grow_power_param);
+    esp_rmaker_device_add_param(bloom_pump_device, bloom_power_param);
 
-    /* Add this switch device to the node */
+    esp_rmaker_device_assign_primary_param(mixing_pump_device, mixing_power_param);
+    esp_rmaker_device_assign_primary_param(micro_pump_device, micro_power_param);
+    esp_rmaker_device_assign_primary_param(grow_pump_device, grow_power_param);
+    esp_rmaker_device_assign_primary_param(bloom_pump_device, bloom_power_param);
+
+    /* Add each pump device to the node */
+    esp_rmaker_node_add_device(node, mixing_pump_device);
+    esp_rmaker_node_add_device(node, micro_pump_device);
+    esp_rmaker_node_add_device(node, grow_pump_device);
+    esp_rmaker_node_add_device(node, bloom_pump_device);
+
+    /* Create the switch device for controlling the RGB */
+    switch_device = esp_rmaker_device_create("RGB Switch", ESP_RMAKER_DEVICE_SWITCH, NULL);
+
+    /* Add write callback for the switch device */
+    esp_rmaker_device_add_cb(switch_device, write_cb, (void*)RGB_RELAY_GPIO);
+
+    /* Add parameters for the switch device */
+    esp_rmaker_device_add_param(switch_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "RGB Switch"));
+    esp_rmaker_device_add_param(switch_device, esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER));
+
+    /* Assign the power parameter as the primary for the switch device */
+    esp_rmaker_device_assign_primary_param(switch_device, esp_rmaker_param_first_of_type(switch_device, ESP_RMAKER_DEF_POWER_NAME));
+
+    /* Add the switch device to the node */
     esp_rmaker_node_add_device(node, switch_device);
 
     /* Enable OTA */
     esp_rmaker_ota_enable_default();
 
-    /* Enable timezone service which will be require for setting appropriate timezone
-     * from the phone apps for scheduling to work correctly.
-     * For more information on the various ways of setting timezone, please check
-     * https://rainmaker.espressif.com/docs/time-service.html.
-     */
+    /* Enable timezone service */
     esp_rmaker_timezone_service_enable();
 
-    /* Enable scheduling. */
+    /* Enable scheduling */
     esp_rmaker_schedule_enable();
 
     /* Enable Scenes */
     esp_rmaker_scenes_enable();
 
-    /* Enable Insights. Requires CONFIG_ESP_INSIGHTS_ENABLED=y */
+    /* Enable Insights */
     app_insights_enable();
 
     /* Start the ESP RainMaker Agent */
     esp_rmaker_start();
 
+    /* Set custom manufacturing data */
     err = app_wifi_set_custom_mfg_data(MGF_DATA_DEVICE_TYPE_SWITCH, MFG_DATA_DEVICE_SUBTYPE_SWITCH);
-    /* Start the Wi-Fi.
-     * If the node is provisioned, it will start connection attempts,
-     * else, it will start Wi-Fi provisioning. The function will return
-     * after a connection has been successfully established
-     */
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error setting custom manufacturing data: %d", err);
+        vTaskDelay(5000/portTICK_PERIOD_MS);
+        abort();
+    }
+
+    /* Start the Wi-Fi */
     err = app_wifi_start(POP_TYPE_RANDOM);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Could not start Wifi. Aborting!!!");
