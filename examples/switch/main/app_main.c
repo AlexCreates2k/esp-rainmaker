@@ -5,6 +5,8 @@
 #include <esp_log.h>
 #include <esp_event.h>
 #include <nvs_flash.h>
+#include <stdlib.h>  // rand(), srand()
+#include <time.h>    // time()
 
 #include <esp_rmaker_core.h>
 #include <esp_rmaker_standard_types.h>
