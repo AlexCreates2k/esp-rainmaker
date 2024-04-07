@@ -7,8 +7,6 @@
 
 #include <string.h>
 #include <inttypes.h>
-#include <stdlib.h>  // rand(), srand()
-#include <time.h>    // time()
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
@@ -36,7 +34,7 @@ esp_rmaker_device_t *switch_device; // Original switch device
 esp_rmaker_device_t *switch_device1; // Define additional switch devices
 esp_rmaker_device_t *switch_device2;
 esp_rmaker_device_t *switch_device3;
-esp_rmaker_device_t *dispense_device; // New dispense device
+esp_rmaker_device_t *dispense_device; // Dispense device
 
 /* Callback to handle commands received from the RainMaker cloud */
 static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
@@ -51,9 +49,18 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
                 esp_rmaker_param_get_name(param));
         app_driver_set_state(val.val.b);
         esp_rmaker_param_update_and_report(param, val);
-        // Generate random value for dispense every time power changes
-        esp_rmaker_param_update_and_report(esp_rmaker_device_get_param_by_type(dispense_device, ESP_RMAKER_PARAM_TEMPERATURE), esp_rmaker_int(rand() % 1000));
     }
+    return ESP_OK;
+}
+
+/* Callback for Dispense device */
+static esp_err_t dispense_write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
+            const esp_rmaker_param_val_t val, void *priv_data, esp_rmaker_write_ctx_t *ctx)
+{
+    if (ctx) {
+        ESP_LOGI(TAG, "Received write request for Dispense device via : %s", esp_rmaker_device_cb_src_to_str(ctx->src));
+    }
+    // Add your Dispense logic here
     return ESP_OK;
 }
 
@@ -154,17 +161,6 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-/* Callback for Dispense device */
-static esp_err_t dispense_write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
-            const esp_rmaker_param_val_t val, void *priv_data, esp_rmaker_write_ctx_t *ctx)
-{
-    if (ctx) {
-        ESP_LOGI(TAG, "Received write request for Dispense device via : %s", esp_rmaker_device_cb_src_to_str(ctx->src));
-    }
-    // Add your Dispense logic here
-    return ESP_OK;
-}
-
 void app_main()
 {
     /* Initialize Application specific hardware drivers and
@@ -245,28 +241,28 @@ void app_main()
     esp_rmaker_device_assign_primary_param(switch_device2, power_param2);
     esp_rmaker_device_assign_primary_param(switch_device3, power_param3);
 
-    /* Create the Dispense device */
-    dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_TEMPERATURE_SENSOR, NULL);
-    /* Add the write callback for the Dispense device */
-    esp_rmaker_device_add_cb(dispense_device, dispense_write_cb, NULL);
-    /* Add standard parameters for the Dispense device */
-    esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense"));
-    esp_rmaker_param_t *dispense_param = esp_rmaker_param_create(ESP_RMAKER_DEF_TEMPERATURE_NAME, esp_rmaker_int(0));
-    esp_rmaker_device_add_param(dispense_device, dispense_param);
-    esp_rmaker_device_assign_primary_param(dispense_device, dispense_param);
-
     /* Add all switch devices to the node */
     esp_rmaker_node_add_device(node, switch_device);
     esp_rmaker_node_add_device(node, switch_device1);
     esp_rmaker_node_add_device(node, switch_device2);
     esp_rmaker_node_add_device(node, switch_device3);
-    /* Add the Dispense device to the node */
+
+    /* Create the Dispense device */
+    dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_TEMP_SENSOR, NULL);
+    /* Add the write callback for the dispense device */
+    esp_rmaker_device_add_cb(dispense_device, dispense_write_cb, NULL);
+    /* Add standard parameters for the dispense device */
+    esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense"));
+    esp_rmaker_param_t *dispense_param = esp_rmaker_param_create(ESP_RMAKER_DEF_TEMPERATURE_NAME, esp_rmaker_int(0));
+    esp_rmaker_device_add_param(dispense_device, dispense_param);
+    esp_rmaker_device_assign_primary_param(dispense_device, dispense_param);
+    /* Add the dispense device to the node */
     esp_rmaker_node_add_device(node, dispense_device);
 
     /* Enable OTA */
     esp_rmaker_ota_enable_default();
 
-    /* Enable timezone service which will be require for setting appropriate timezone
+    /* Enable timezone service which will be required for setting appropriate timezone
      * from the phone apps for scheduling to work correctly.
      * For more information on the various ways of setting timezone, please check
      * https://rainmaker.espressif.com/docs/time-service.html.
@@ -285,7 +281,8 @@ void app_main()
     /* Start the ESP RainMaker Agent */
     esp_rmaker_start();
 
-    err = app_wifi_set_custom_mfg_data(MGF_DATA_DEVICE_TYPE_SWITCH, MFG_DATA_DEVICE_SUBTYPE_SWITCH);
+    srand(time(NULL));  // Seed for random number generation
+
     /* Start the Wi-Fi.
      * If the node is provisioned, it will start connection attempts,
      * else, it will start Wi-Fi provisioning. The function will return
@@ -297,6 +294,4 @@ void app_main()
         vTaskDelay(5000/portTICK_PERIOD_MS);
         abort();
     }
-
-    srand(time(NULL));  // Seed for random number generation
 }
