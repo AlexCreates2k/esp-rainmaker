@@ -1,7 +1,5 @@
-= /* Switch Example
-
+/* Switch Example
    This example code is in the Public Domain (or CC0 licensed, at your option.)
-
    Unless required by applicable law or agreed to in writing, this
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
@@ -32,7 +30,10 @@
 #include "app_priv.h"
 
 static const char *TAG = "app_main";
-esp_rmaker_device_t *switch_device;
+esp_rmaker_device_t *switch_device; // Original switch device
+esp_rmaker_device_t *switch_device1; // Define additional switch devices
+esp_rmaker_device_t *switch_device2;
+esp_rmaker_device_t *switch_device3;
 
 /* Callback to handle commands received from the RainMaker cloud */
 static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
@@ -50,6 +51,7 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
     }
     return ESP_OK;
 }
+
 /* Event handler for catching RainMaker events */
 static void event_handler(void* arg, esp_event_base_t event_base,
                           int32_t event_id, void* event_data)
@@ -187,36 +189,51 @@ void app_main()
         abort();
     }
 
-    /* Create a Switch device.
-     * You can optionally use the helper API esp_rmaker_switch_device_create() to
-     * avoid writing code for adding the name and power parameters.
-     */
+    /* Create the original Switch device */
     switch_device = esp_rmaker_device_create("Switch", ESP_RMAKER_DEVICE_SWITCH, NULL);
 
-    /* Add the write callback for the device. We aren't registering any read callback yet as
-     * it is for future use.
-     */
+    /* Add the write callback for the original device */
     esp_rmaker_device_add_cb(switch_device, write_cb, NULL);
 
-    /* Add the standard name parameter (type: esp.param.name), which allows setting a persistent,
-     * user friendly custom name from the phone apps. All devices are recommended to have this
-     * parameter.
-     */
+    /* Add standard parameters for the original switch device */
     esp_rmaker_device_add_param(switch_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch"));
 
-    /* Add the standard power parameter (type: esp.param.power), which adds a boolean param
-     * with a toggle switch ui-type.
-     */
     esp_rmaker_param_t *power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
     esp_rmaker_device_add_param(switch_device, power_param);
-
-    /* Assign the power parameter as the primary, so that it can be controlled from the
-     * home screen of the phone apps.
-     */
     esp_rmaker_device_assign_primary_param(switch_device, power_param);
 
-    /* Add this switch device to the node */
+    /* Create additional switch devices */
+    switch_device1 = esp_rmaker_device_create("Switch1", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    switch_device2 = esp_rmaker_device_create("Switch2", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    switch_device3 = esp_rmaker_device_create("Switch3", ESP_RMAKER_DEVICE_SWITCH, NULL);
+
+    /* Add the write callback for each additional device */
+    esp_rmaker_device_add_cb(switch_device1, write_cb, NULL);
+    esp_rmaker_device_add_cb(switch_device2, write_cb, NULL);
+    esp_rmaker_device_add_cb(switch_device3, write_cb, NULL);
+
+    /* Add standard parameters for each additional switch device */
+    esp_rmaker_device_add_param(switch_device1, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch1"));
+    esp_rmaker_device_add_param(switch_device2, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch2"));
+    esp_rmaker_device_add_param(switch_device3, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch3"));
+
+    esp_rmaker_param_t *power_param1 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
+    esp_rmaker_param_t *power_param2 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
+    esp_rmaker_param_t *power_param3 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
+
+    esp_rmaker_device_add_param(switch_device1, power_param1);
+    esp_rmaker_device_add_param(switch_device2, power_param2);
+    esp_rmaker_device_add_param(switch_device3, power_param3);
+
+    esp_rmaker_device_assign_primary_param(switch_device1, power_param1);
+    esp_rmaker_device_assign_primary_param(switch_device2, power_param2);
+    esp_rmaker_device_assign_primary_param(switch_device3, power_param3);
+
+    /* Add all switch devices to the node */
     esp_rmaker_node_add_device(node, switch_device);
+    esp_rmaker_node_add_device(node, switch_device1);
+    esp_rmaker_node_add_device(node, switch_device2);
+    esp_rmaker_node_add_device(node, switch_device3);
 
     /* Enable OTA */
     esp_rmaker_ota_enable_default();
