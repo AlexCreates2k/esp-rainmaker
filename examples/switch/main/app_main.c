@@ -1,10 +1,3 @@
-/* Switch Example
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-
 #include <string.h>
 #include <inttypes.h>
 #include <freertos/FreeRTOS.h>
@@ -27,9 +20,6 @@
 #include <app_wifi.h>
 #include <app_insights.h>
 
-#include <stdlib.h>  // rand(), srand()
-#include <time.h>    // time()
-
 #include "app_priv.h"
 
 static const char *TAG = "app_main";
@@ -37,7 +27,7 @@ esp_rmaker_device_t *switch_device; // Original switch device
 esp_rmaker_device_t *switch_device1; // Define additional switch devices
 esp_rmaker_device_t *switch_device2;
 esp_rmaker_device_t *switch_device3;
-esp_rmaker_device_t *dispense_device; // Dispense device
+esp_rmaker_device_t *temperature_device; // Temperature sensor device
 
 /* Callback to handle commands received from the RainMaker cloud */
 static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
@@ -53,17 +43,6 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
         app_driver_set_state(val.val.b);
         esp_rmaker_param_update_and_report(param, val);
     }
-    return ESP_OK;
-}
-
-/* Callback for Dispense device */
-static esp_err_t dispense_write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
-            const esp_rmaker_param_val_t val, void *priv_data, esp_rmaker_write_ctx_t *ctx)
-{
-    if (ctx) {
-        ESP_LOGI(TAG, "Received write request for Dispense device via : %s", esp_rmaker_device_cb_src_to_str(ctx->src));
-    }
-    // Add your Dispense logic here
     return ESP_OK;
 }
 
@@ -191,9 +170,7 @@ void app_main()
     ESP_ERROR_CHECK(esp_event_handler_register(APP_WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(RMAKER_OTA_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
 
-    /* Initialize the ESP RainMaker Agent.
-     * Note that this should be called after app_wifi_init() but before app_wifi_start()
-     * */
+    /* Initialize RainMaker */
     esp_rmaker_config_t rainmaker_cfg = {
         .enable_time_sync = false,
     };
@@ -204,42 +181,35 @@ void app_main()
         abort();
     }
 
-    /* Create the original Switch device */
-    switch_device = esp_rmaker_device_create("Switch", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    /* Create all switch devices */
+    switch_device = esp_rmaker_switch_device_create("Switch", NULL);
+    switch_device1 = esp_rmaker_switch_device_create("Switch1", NULL);
+    switch_device2 = esp_rmaker_switch_device_create("Switch2", NULL);
+    switch_device3 = esp_rmaker_switch_device_create("Switch3", NULL);
 
-    /* Add the write callback for the original device */
+    /* Add write callback for all switch devices */
     esp_rmaker_device_add_cb(switch_device, write_cb, NULL);
-
-    /* Add standard parameters for the original switch device */
-    esp_rmaker_device_add_param(switch_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch"));
-
-    esp_rmaker_param_t *power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
-    esp_rmaker_device_add_param(switch_device, power_param);
-    esp_rmaker_device_assign_primary_param(switch_device, power_param);
-
-    /* Create additional switch devices */
-    switch_device1 = esp_rmaker_device_create("Switch1", ESP_RMAKER_DEVICE_SWITCH, NULL);
-    switch_device2 = esp_rmaker_device_create("Switch2", ESP_RMAKER_DEVICE_SWITCH, NULL);
-    switch_device3 = esp_rmaker_device_create("Switch3", ESP_RMAKER_DEVICE_SWITCH, NULL);
-
-    /* Add the write callback for each additional device */
     esp_rmaker_device_add_cb(switch_device1, write_cb, NULL);
     esp_rmaker_device_add_cb(switch_device2, write_cb, NULL);
     esp_rmaker_device_add_cb(switch_device3, write_cb, NULL);
 
-    /* Add standard parameters for each additional switch device */
+    /* Add standard parameters for all switch devices */
+    esp_rmaker_device_add_param(switch_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch"));
     esp_rmaker_device_add_param(switch_device1, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch1"));
     esp_rmaker_device_add_param(switch_device2, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch2"));
     esp_rmaker_device_add_param(switch_device3, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch3"));
 
+    esp_rmaker_param_t *power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
     esp_rmaker_param_t *power_param1 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
     esp_rmaker_param_t *power_param2 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
     esp_rmaker_param_t *power_param3 = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
 
+    esp_rmaker_device_add_param(switch_device, power_param);
     esp_rmaker_device_add_param(switch_device1, power_param1);
     esp_rmaker_device_add_param(switch_device2, power_param2);
     esp_rmaker_device_add_param(switch_device3, power_param3);
 
+    esp_rmaker_device_assign_primary_param(switch_device, power_param);
     esp_rmaker_device_assign_primary_param(switch_device1, power_param1);
     esp_rmaker_device_assign_primary_param(switch_device2, power_param2);
     esp_rmaker_device_assign_primary_param(switch_device3, power_param3);
@@ -250,21 +220,15 @@ void app_main()
     esp_rmaker_node_add_device(node, switch_device2);
     esp_rmaker_node_add_device(node, switch_device3);
 
-    /* Create the Dispense device */
-    dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_TEMP_SENSOR, NULL);
-
-    /* Add the write callback for the Dispense device */
-    esp_rmaker_device_add_cb(dispense_device, dispense_write_cb, NULL);
-
-    /* Add standard parameters for the Dispense device */
-    esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense"));
-
-    esp_rmaker_param_t *dispense_param = esp_rmaker_param_create(ESP_RMAKER_DEF_TEMPERATURE_NAME, ESP_RMAKER_PARAM_TYPE_FLOAT, esp_rmaker_float(0.0f));
-    esp_rmaker_device_add_param(dispense_device, dispense_param);
-    esp_rmaker_device_assign_primary_param(dispense_device, dispense_param);
-
-    /* Add the Dispense device to the node */
-    esp_rmaker_node_add_device(node, dispense_device);
+    /* Create a temperature sensor device */
+    temperature_device = esp_rmaker_temp_sensor_device_create("Temperature Sensor", NULL);
+    if (temperature_device) {
+        esp_rmaker_node_add_device(node, temperature_device);
+    } else {
+        ESP_LOGE(TAG, "Could not create temperature sensor. Aborting!!!");
+        vTaskDelay(5000/portTICK_PERIOD_MS);
+        abort();
+    }
 
     /* Enable OTA */
     esp_rmaker_ota_enable_default();
@@ -288,12 +252,10 @@ void app_main()
     /* Start the ESP RainMaker Agent */
     esp_rmaker_start();
 
+    /* Set custom manufacturer data */
     err = app_wifi_set_custom_mfg_data(MGF_DATA_DEVICE_TYPE_SWITCH, MFG_DATA_DEVICE_SUBTYPE_SWITCH);
-    /* Start the Wi-Fi.
-     * If the node is provisioned, it will start connection attempts,
-     * else, it will start Wi-Fi provisioning. The function will return
-     * after a connection has been successfully established
-     */
+
+    /* Start Wi-Fi */
     err = app_wifi_start(POP_TYPE_RANDOM);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Could not start Wifi. Aborting!!!");
