@@ -6,9 +6,9 @@
 */
 
 #include <string.h>
+#include <inttypes.h>
 #include <stdlib.h>  // rand(), srand()
 #include <time.h>    // time()
-#include <inttypes.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
@@ -36,7 +36,7 @@ esp_rmaker_device_t *switch_device; // Original switch device
 esp_rmaker_device_t *switch_device1; // Define additional switch devices
 esp_rmaker_device_t *switch_device2;
 esp_rmaker_device_t *switch_device3;
-esp_rmaker_device_t *dispense_device; // Dispense device
+esp_rmaker_device_t *dispense_device; // New dispense device
 
 /* Callback to handle commands received from the RainMaker cloud */
 static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
@@ -51,8 +51,107 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
                 esp_rmaker_param_get_name(param));
         app_driver_set_state(val.val.b);
         esp_rmaker_param_update_and_report(param, val);
+        // Generate random value for dispense every time power changes
+        esp_rmaker_param_update_and_report(esp_rmaker_device_get_param_by_type(dispense_device, ESP_RMAKER_PARAM_TEMPERATURE), esp_rmaker_int(rand() % 1000));
     }
     return ESP_OK;
+}
+
+/* Event handler for catching RainMaker events */
+static void event_handler(void* arg, esp_event_base_t event_base,
+                          int32_t event_id, void* event_data)
+{
+    if (event_base == RMAKER_EVENT) {
+        switch (event_id) {
+            case RMAKER_EVENT_INIT_DONE:
+                ESP_LOGI(TAG, "RainMaker Initialised.");
+                break;
+            case RMAKER_EVENT_CLAIM_STARTED:
+                ESP_LOGI(TAG, "RainMaker Claim Started.");
+                break;
+            case RMAKER_EVENT_CLAIM_SUCCESSFUL:
+                ESP_LOGI(TAG, "RainMaker Claim Successful.");
+                break;
+            case RMAKER_EVENT_CLAIM_FAILED:
+                ESP_LOGI(TAG, "RainMaker Claim Failed.");
+                break;
+            case RMAKER_EVENT_LOCAL_CTRL_STARTED:
+                ESP_LOGI(TAG, "Local Control Started.");
+                break;
+            case RMAKER_EVENT_LOCAL_CTRL_STOPPED:
+                ESP_LOGI(TAG, "Local Control Stopped.");
+                break;
+            default:
+                ESP_LOGW(TAG, "Unhandled RainMaker Event: %"PRIi32, event_id);
+        }
+    } else if (event_base == RMAKER_COMMON_EVENT) {
+        switch (event_id) {
+            case RMAKER_EVENT_REBOOT:
+                ESP_LOGI(TAG, "Rebooting in %d seconds.", *((uint8_t *)event_data));
+                break;
+            case RMAKER_EVENT_WIFI_RESET:
+                ESP_LOGI(TAG, "Wi-Fi credentials reset.");
+                break;
+            case RMAKER_EVENT_FACTORY_RESET:
+                ESP_LOGI(TAG, "Node reset to factory defaults.");
+                break;
+            case RMAKER_MQTT_EVENT_CONNECTED:
+                ESP_LOGI(TAG, "MQTT Connected.");
+                break;
+            case RMAKER_MQTT_EVENT_DISCONNECTED:
+                ESP_LOGI(TAG, "MQTT Disconnected.");
+                break;
+            case RMAKER_MQTT_EVENT_PUBLISHED:
+                ESP_LOGI(TAG, "MQTT Published. Msg id: %d.", *((int *)event_data));
+                break;
+            default:
+                ESP_LOGW(TAG, "Unhandled RainMaker Common Event: %"PRIi32, event_id);
+        }
+    } else if (event_base == APP_WIFI_EVENT) {
+        switch (event_id) {
+            case APP_WIFI_EVENT_QR_DISPLAY:
+                ESP_LOGI(TAG, "Provisioning QR : %s", (char *)event_data);
+                break;
+            case APP_WIFI_EVENT_PROV_TIMEOUT:
+                ESP_LOGI(TAG, "Provisioning Timed Out. Please reboot.");
+                break;
+            case APP_WIFI_EVENT_PROV_RESTART:
+                ESP_LOGI(TAG, "Provisioning has restarted due to failures.");
+                break;
+            default:
+                ESP_LOGW(TAG, "Unhandled App Wi-Fi Event: %"PRIi32, event_id);
+                break;
+        }
+    } else if (event_base == RMAKER_OTA_EVENT) {
+         switch(event_id) {
+            case RMAKER_OTA_EVENT_STARTING:
+                ESP_LOGI(TAG, "Starting OTA.");
+                break;
+            case RMAKER_OTA_EVENT_IN_PROGRESS:
+                ESP_LOGI(TAG, "OTA is in progress.");
+                break;
+            case RMAKER_OTA_EVENT_SUCCESSFUL:
+                ESP_LOGI(TAG, "OTA successful.");
+                break;
+            case RMAKER_OTA_EVENT_FAILED:
+                ESP_LOGI(TAG, "OTA Failed.");
+                break;
+            case RMAKER_OTA_EVENT_REJECTED:
+                ESP_LOGI(TAG, "OTA Rejected.");
+                break;
+            case RMAKER_OTA_EVENT_DELAYED:
+                ESP_LOGI(TAG, "OTA Delayed.");
+                break;
+            case RMAKER_OTA_EVENT_REQ_FOR_REBOOT:
+                ESP_LOGI(TAG, "Firmware image downloaded. Please reboot your device to apply the upgrade.");
+                break;
+            default:
+                ESP_LOGW(TAG, "Unhandled OTA Event: %"PRIi32, event_id);
+                break;
+        }
+    } else {
+        ESP_LOGW(TAG, "Invalid event received!");
+    }
 }
 
 /* Callback for Dispense device */
@@ -62,18 +161,8 @@ static esp_err_t dispense_write_cb(const esp_rmaker_device_t *device, const esp_
     if (ctx) {
         ESP_LOGI(TAG, "Received write request for Dispense device via : %s", esp_rmaker_device_cb_src_to_str(ctx->src));
     }
-    // Generate random value for dispense parameter
-    srand(time(NULL)); // Seed for random number generation
-    int dispensed_value = rand() % 1000; // Generate a random number between 0 and 999
-    esp_rmaker_param_update_and_report(param, esp_rmaker_int(dispensed_value));
+    // Add your Dispense logic here
     return ESP_OK;
-}
-
-/* Event handler for catching RainMaker events */
-static void event_handler(void* arg, esp_event_base_t event_base,
-                          int32_t event_id, void* event_data)
-{
-    // Event handling code...
 }
 
 void app_main()
@@ -156,25 +245,21 @@ void app_main()
     esp_rmaker_device_assign_primary_param(switch_device2, power_param2);
     esp_rmaker_device_assign_primary_param(switch_device3, power_param3);
 
+    /* Create the Dispense device */
+    dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_TEMPERATURE_SENSOR, NULL);
+    /* Add the write callback for the Dispense device */
+    esp_rmaker_device_add_cb(dispense_device, dispense_write_cb, NULL);
+    /* Add standard parameters for the Dispense device */
+    esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense"));
+    esp_rmaker_param_t *dispense_param = esp_rmaker_param_create(ESP_RMAKER_DEF_TEMPERATURE_NAME, esp_rmaker_int(0));
+    esp_rmaker_device_add_param(dispense_device, dispense_param);
+    esp_rmaker_device_assign_primary_param(dispense_device, dispense_param);
+
     /* Add all switch devices to the node */
     esp_rmaker_node_add_device(node, switch_device);
     esp_rmaker_node_add_device(node, switch_device1);
     esp_rmaker_node_add_device(node, switch_device2);
     esp_rmaker_node_add_device(node, switch_device3);
-
-    /* Create the Dispense device */
-    dispense_device = esp_rmaker_device_create("Dispense", ESP_RMAKER_DEVICE_TEMPERATURE, NULL);
-
-    /* Add the write callback for the Dispense device */
-    esp_rmaker_device_add_cb(dispense_device, dispense_write_cb, NULL);
-
-    /* Add standard parameters for the Dispense device */
-    esp_rmaker_device_add_param(dispense_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Dispense"));
-
-    esp_rmaker_param_t *dispense_param = esp_rmaker_param_create(ESP_RMAKER_DEF_TEMPERATURE_NAME, esp_rmaker_int(0));
-    esp_rmaker_device_add_param(dispense_device, dispense_param);
-    esp_rmaker_device_assign_primary_param(dispense_device, dispense_param);
-
     /* Add the Dispense device to the node */
     esp_rmaker_node_add_device(node, dispense_device);
 
@@ -212,4 +297,6 @@ void app_main()
         vTaskDelay(5000/portTICK_PERIOD_MS);
         abort();
     }
+
+    srand(time(NULL));  // Seed for random number generation
 }
