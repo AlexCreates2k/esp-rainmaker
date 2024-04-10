@@ -1,4 +1,9 @@
 {
     "cmake.options.statusBarVisibility": "visible",
-    "genieai.openai.temperature": 0.1
+    "genieai.openai.temperature": 0.1,
+    "idf.adapterTargetName": "esp32s3",
+    "idf.openOcdConfigs": [
+        "interface/ftdi/esp32_devkitj_v1.cfg",
+        "target/esp32s3.cfg"
+    ]
 }
