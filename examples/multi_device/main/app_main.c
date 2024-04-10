@@ -26,9 +26,10 @@
 
 static const char *TAG = "app_main";
 
-esp_rmaker_device_t *switch_device;
-esp_rmaker_device_t *light_device;
-esp_rmaker_device_t *fan_device;
+esp_rmaker_device_t *switch_device1;
+esp_rmaker_device_t *switch_device2;
+esp_rmaker_device_t *switch_device3;
+esp_rmaker_device_t *switch_device4;
 esp_rmaker_device_t *temp_sensor_device;
 
 /* Callback to handle commands received from the RainMaker cloud */
@@ -43,15 +44,9 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
     if (strcmp(param_name, ESP_RMAKER_DEF_POWER_NAME) == 0) {
         ESP_LOGI(TAG, "Received value = %s for %s - %s",
                 val.val.b? "true" : "false", device_name, param_name);
-        if (strcmp(device_name, "Switch") == 0) {
+        if (strcmp(device_name, "Switch1") == 0 || strcmp(device_name, "Switch2") == 0 || strcmp(device_name, "Switch3") == 0 || strcmp(device_name, "Switch4") == 0) {
             app_driver_set_state(val.val.b);
         }
-    } else if (strcmp(param_name, ESP_RMAKER_DEF_BRIGHTNESS_NAME) == 0) {
-        ESP_LOGI(TAG, "Received value = %d for %s - %s",
-                val.val.i, device_name, param_name);
-    } else if (strcmp(param_name, ESP_RMAKER_DEF_SPEED_NAME) == 0) {
-        ESP_LOGI(TAG, "Received value = %d for %s - %s",
-                val.val.i, device_name, param_name);
     } else {
         /* Silently ignoring invalid params */
         return ESP_OK;
@@ -93,28 +88,22 @@ void app_main()
         abort();
     }
 
-    /* Create a Switch device and add the relevant parameters to it */
-    switch_device = esp_rmaker_switch_device_create("Switch", NULL, DEFAULT_SWITCH_POWER);
-    esp_rmaker_device_add_cb(switch_device, write_cb, NULL);
-    esp_rmaker_node_add_device(node, switch_device);
+    /* Create Switch devices and add the relevant parameters to them */
+    switch_device1 = esp_rmaker_switch_device_create("Switch1", NULL, DEFAULT_SWITCH_POWER);
+    esp_rmaker_device_add_cb(switch_device1, write_cb, NULL);
+    esp_rmaker_node_add_device(node, switch_device1);
 
-    /* Create a Light device and add the relevant parameters to it */
-    light_device = esp_rmaker_lightbulb_device_create("Light", NULL, DEFAULT_LIGHT_POWER);
-    esp_rmaker_device_add_cb(light_device, write_cb, NULL);
-    
-    esp_rmaker_device_add_param(light_device,
-            esp_rmaker_brightness_param_create(ESP_RMAKER_DEF_BRIGHTNESS_NAME, DEFAULT_LIGHT_BRIGHTNESS));
-    
-    esp_rmaker_device_add_attribute(light_device, "Serial Number", "012345");
-    esp_rmaker_device_add_attribute(light_device, "MAC", "xx:yy:zz:aa:bb:cc");
+    switch_device2 = esp_rmaker_switch_device_create("Switch2", NULL, DEFAULT_SWITCH_POWER);
+    esp_rmaker_device_add_cb(switch_device2, write_cb, NULL);
+    esp_rmaker_node_add_device(node, switch_device2);
 
-    esp_rmaker_node_add_device(node, light_device);
-    
-    /* Create a Fan device and add the relevant parameters to it */
-    fan_device = esp_rmaker_fan_device_create("Fan", NULL, DEFAULT_FAN_POWER);
-    esp_rmaker_device_add_cb(fan_device, write_cb, NULL);
-    esp_rmaker_device_add_param(fan_device, esp_rmaker_speed_param_create(ESP_RMAKER_DEF_SPEED_NAME, DEFAULT_FAN_SPEED));
-    esp_rmaker_node_add_device(node, fan_device);
+    switch_device3 = esp_rmaker_switch_device_create("Switch3", NULL, DEFAULT_SWITCH_POWER);
+    esp_rmaker_device_add_cb(switch_device3, write_cb, NULL);
+    esp_rmaker_node_add_device(node, switch_device3);
+
+    switch_device4 = esp_rmaker_switch_device_create("Switch4", NULL, DEFAULT_SWITCH_POWER);
+    esp_rmaker_device_add_cb(switch_device4, write_cb, NULL);
+    esp_rmaker_node_add_device(node, switch_device4);
     
     /* Create a Temperature Sensor device and add the relevant parameters to it */
     temp_sensor_device = esp_rmaker_temp_sensor_device_create("Temperature Sensor", NULL, app_get_current_temperature());
