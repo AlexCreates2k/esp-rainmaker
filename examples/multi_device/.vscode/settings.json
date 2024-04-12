@@ -1,9 +1,6 @@
 {
-<<<<<<< HEAD
-    "idf.portWin": "COM4",
-=======
-    "idf.portWin": "COM13",
->>>>>>> 3caa5d5e7c47e4de9e2277b277eb7c18e936960d
+    "cmake.options.statusBarVisibility": "visible",
+    "genieai.openai.temperature": 0.1,
     "idf.adapterTargetName": "esp32s3",
     "idf.openOcdConfigs": [
         "interface/ftdi/esp32_devkitj_v1.cfg",

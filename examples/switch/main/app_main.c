@@ -1,7 +1,5 @@
 /* Switch Example
-
    This example code is in the Public Domain (or CC0 licensed, at your option.)
-
    Unless required by applicable law or agreed to in writing, this
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
@@ -31,8 +29,15 @@
 
 #include "app_priv.h"
 
+#include <stdlib.h>  // rand(), srand()
+#include <time.h>    // time()
+
 static const char *TAG = "app_main";
-esp_rmaker_device_t *switch_device;
+esp_rmaker_device_t *switch_device; // Original switch device
+esp_rmaker_device_t *switch_device1; // Define additional switch devices
+esp_rmaker_device_t *switch_device2;
+esp_rmaker_device_t *switch_device3;
+esp_rmaker_device_t *temperature_device; // Temperature sensor device
 
 /* Callback to handle commands received from the RainMaker cloud */
 static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
@@ -50,6 +55,18 @@ static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_pa
     }
     return ESP_OK;
 }
+
+/* Callback for Temperature Sensor device */
+static esp_err_t temp_sensor_write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
+            const esp_rmaker_param_val_t val, void *priv_data, esp_rmaker_write_ctx_t *ctx)
+{
+    if (ctx) {
+        ESP_LOGI(TAG, "Received write request for Temperature Sensor device via : %s", esp_rmaker_device_cb_src_to_str(ctx->src));
+    }
+    // Add your Temperature Sensor logic here
+    return ESP_OK;
+}
+
 /* Event handler for catching RainMaker events */
 static void event_handler(void* arg, esp_event_base_t event_base,
                           int32_t event_id, void* event_data)
@@ -116,7 +133,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                 break;
         }
     } else if (event_base == RMAKER_OTA_EVENT) {
-        switch(event_id) {
+         switch(event_id) {
             case RMAKER_OTA_EVENT_STARTING:
                 ESP_LOGI(TAG, "Starting OTA.");
                 break;
@@ -162,94 +179,58 @@ void app_main()
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
-    ESP_ERROR_CHECK( err );
+    ESP_ERROR_CHECK(err);
 
-    /* Initialize Wi-Fi. Note that, this should be called before esp_rmaker_node_init()
-     */
-    app_wifi_init();
-
-    /* Register an event handler to catch RainMaker events */
-    ESP_ERROR_CHECK(esp_event_handler_register(RMAKER_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(RMAKER_COMMON_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(APP_WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(RMAKER_OTA_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
-
-    /* Initialize the ESP RainMaker Agent.
-     * Note that this should be called after app_wifi_init() but before app_wifi_start()
-     * */
-    esp_rmaker_config_t rainmaker_cfg = {
-        .enable_time_sync = false,
-    };
-    esp_rmaker_node_t *node = esp_rmaker_node_init(&rainmaker_cfg, "ESP RainMaker Device", "Switch");
-    if (!node) {
-        ESP_LOGE(TAG, "Could not initialise node. Aborting!!!");
-        vTaskDelay(5000/portTICK_PERIOD_MS);
+    /* Initialize Wi-Fi. Starting Wi-Fi here so that provisioning can be done via Wi-Fi. */
+    err = app_wifi_set_custom_mfg_data(MFG_DATA_DEVICE_TYPE_SWITCH, MFG_DATA_DEVICE_SUBTYPE_SWITCH);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Could not set custom mfg data for Switch. Aborting!!!");
         abort();
     }
-
-    /* Create a Switch device.
-     * You can optionally use the helper API esp_rmaker_switch_device_create() to
-     * avoid writing code for adding the name and power parameters.
-     */
-    switch_device = esp_rmaker_device_create("Switch", ESP_RMAKER_DEVICE_SWITCH, NULL);
-
-    /* Add the write callback for the device. We aren't registering any read callback yet as
-     * it is for future use.
-     */
-    esp_rmaker_device_add_cb(switch_device, write_cb, NULL);
-
-    /* Add the standard name parameter (type: esp.param.name), which allows setting a persistent,
-     * user friendly custom name from the phone apps. All devices are recommended to have this
-     * parameter.
-     */
-    esp_rmaker_device_add_param(switch_device, esp_rmaker_name_param_create(ESP_RMAKER_DEF_NAME_PARAM, "Switch"));
-
-    /* Add the standard power parameter (type: esp.param.power), which adds a boolean param
-     * with a toggle switch ui-type.
-     */
-    esp_rmaker_param_t *power_param = esp_rmaker_power_param_create(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER);
-    esp_rmaker_device_add_param(switch_device, power_param);
-
-    /* Assign the power parameter as the primary, so that it can be controlled from the
-     * home screen of the phone apps.
-     */
-    esp_rmaker_device_assign_primary_param(switch_device, power_param);
-
-    /* Add this switch device to the node */
-    esp_rmaker_node_add_device(node, switch_device);
-
-    /* Enable OTA */
-    esp_rmaker_ota_enable_default();
-
-    /* Enable timezone service which will be require for setting appropriate timezone
-     * from the phone apps for scheduling to work correctly.
-     * For more information on the various ways of setting timezone, please check
-     * https://rainmaker.espressif.com/docs/time-service.html.
-     */
-    esp_rmaker_timezone_service_enable();
-
-    /* Enable scheduling. */
-    esp_rmaker_schedule_enable();
-
-    /* Enable Scenes */
-    esp_rmaker_scenes_enable();
-
-    /* Enable Insights. Requires CONFIG_ESP_INSIGHTS_ENABLED=y */
-    app_insights_enable();
-
-    /* Start the ESP RainMaker Agent */
-    esp_rmaker_start();
-
-    err = app_wifi_set_custom_mfg_data(MGF_DATA_DEVICE_TYPE_SWITCH, MFG_DATA_DEVICE_SUBTYPE_SWITCH);
-    /* Start the Wi-Fi.
-     * If the node is provisioned, it will start connection attempts,
-     * else, it will start Wi-Fi provisioning. The function will return
-     * after a connection has been successfully established
-     */
-    err = app_wifi_start(POP_TYPE_RANDOM);
+    err = app_wifi_start(POP_TYPE_BUTTON);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Could not start Wifi. Aborting!!!");
         vTaskDelay(5000/portTICK_PERIOD_MS);
         abort();
     }
+
+    /* Create the original Switch device */
+    switch_device = esp_rmaker_switch_device_create("Switch", NULL);  
+
+    /* Define additional switch devices */
+    switch_device1 = esp_rmaker_switch_device_create("Switch1", NULL);
+    switch_device2 = esp_rmaker_switch_device_create("Switch2", NULL);
+    switch_device3 = esp_rmaker_switch_device_create("Switch3", NULL);
+
+    /* Create the Temperature Sensor device */
+    temperature_device = esp_rmaker_temp_sensor_device_create("Temperature Sensor", NULL);
+
+    /* Add callbacks */
+    esp_rmaker_device_add_cb(switch_device, write_cb, NULL);
+    esp_rmaker_device_add_cb(switch_device1, write_cb, NULL);
+    esp_rmaker_device_add_cb(switch_device2, write_cb, NULL);
+    esp_rmaker_device_add_cb(switch_device3, write_cb, NULL);
+    esp_rmaker_device_add_cb(temperature_device, temp_sensor_write_cb, NULL);
+
+    /* Add standard parameters for the original switch device */
+    esp_rmaker_device_add_param(switch_device, esp_rmaker_switch_create_power_param(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER));
+    esp_rmaker_device_add_param(switch_device1, esp_rmaker_switch_create_power_param(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER));
+    esp_rmaker_device_add_param(switch_device2, esp_rmaker_switch_create_power_param(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER));
+    esp_rmaker_device_add_param(switch_device3, esp_rmaker_switch_create_power_param(ESP_RMAKER_DEF_POWER_NAME, DEFAULT_POWER));
+
+    /* Add standard parameters for the temperature sensor device */
+    esp_rmaker_device_add_param(temperature_device, esp_rmaker_temp_sensor_create_temperature_param(ESP_RMAKER_DEF_TEMPERATURE_NAME, DEFAULT_TEMPERATURE));
+
+    /* Start RainMaker */
+    err = esp_rmaker_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Could not start RainMaker. Aborting!!!");
+        abort();
+    }
+
+    /* Register callback for catching RainMaker events */
+    ESP_ERROR_CHECK(esp_event_handler_register(RMAKER_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(RMAKER_COMMON_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(APP_WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(RMAKER_OTA_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
 }
